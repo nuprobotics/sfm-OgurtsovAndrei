@@ -62,7 +62,7 @@ Create a function that performs resection.
 
 **Autotests specs:**
 + Function should be called `resection`
-+ Function should take two images, camera matrix, matches between  and corresponding 3D points as input
++ Function should take two images, camera matrix, matches between image points on the first two images and 3D points as input
 + Function should return projection matrix
 
 To test your implementation run:
