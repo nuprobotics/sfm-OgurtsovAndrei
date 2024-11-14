@@ -16,9 +16,30 @@ def get_matches(image1, image2) -> typing.Tuple[
     kp2, descriptors2 = sift.detectAndCompute(img2_gray, None)
 
     bf = cv2.BFMatcher()
-    matches_1_to_2: typing.Sequence[typing.Sequence[cv2.DMatch]] = bf.knnMatch(descriptors1, descriptors2, k=2)
+    matches_1_to_2 = bf.knnMatch(descriptors1, descriptors2, k=2)
+    matches_2_to_1 = bf.knnMatch(descriptors2, descriptors1, k=2)
 
-    # YOUR CODE HERE
+    ratio_threshold = 0.75
+    good_matches_1_to_2 = []
+    for m, n in matches_1_to_2:
+        if m.distance < ratio_threshold * n.distance:
+            good_matches_1_to_2.append(m)
+
+    good_matches_2_to_1 = []
+    for m, n in matches_2_to_1:
+        if m.distance < ratio_threshold * n.distance:
+            good_matches_2_to_1.append(m)
+
+    matches_2_to_1_dict = {m.queryIdx: m.trainIdx for m in good_matches_2_to_1}
+
+    cross_checked_matches = []
+    for m in good_matches_1_to_2:
+        queryIdx1 = m.queryIdx
+        trainIdx1 = m.trainIdx
+        if matches_2_to_1_dict.get(trainIdx1) == queryIdx1:
+            cross_checked_matches.append(m)
+
+    return kp1, kp2, cross_checked_matches
 
 
 def get_second_camera_position(kp1, kp2, matches, camera_matrix):
@@ -40,25 +61,97 @@ def triangulation(
         kp2: typing.Sequence[cv2.KeyPoint],
         matches: typing.Sequence[cv2.DMatch]
 ):
-    pass
-    # YOUR CODE HERE
+    """
+    Triangulate 3D points from matched keypoints in two images.
+
+    :param camera_matrix: Intrinsic camera matrix, np.ndarray of shape (3, 3)
+    :param camera1_translation_vector: Translation vector of the first camera, np.ndarray of shape (3,)
+    :param camera1_rotation_matrix: Rotation matrix of the first camera, np.ndarray of shape (3, 3)
+    :param camera2_translation_vector: Translation vector of the second camera, np.ndarray of shape (3,)
+    :param camera2_rotation_matrix: Rotation matrix of the second camera, np.ndarray of shape (3, 3)
+    :param kp1: Keypoints from the first image, sequence of cv2.KeyPoint
+    :param kp2: Keypoints from the second image, sequence of cv2.KeyPoint
+    :param matches: Matches between keypoints, sequence of cv2.DMatch
+    :return: Triangulated 3D points, np.ndarray of shape (N, 3)
+    """
+
+    points1 = np.array([kp1[m.queryIdx].pt for m in matches], dtype=np.float32)  # Shape: (N, 2)
+    points2 = np.array([kp2[m.trainIdx].pt for m in matches], dtype=np.float32)  # Shape: (N, 2)
+
+    t1 = camera1_translation_vector.reshape(3, 1)
+    t2 = camera2_translation_vector.reshape(3, 1)
+
+    proj_matrix1 = camera_matrix @ np.hstack((camera1_rotation_matrix, t1))
+    proj_matrix2 = camera_matrix @ np.hstack((camera2_rotation_matrix, t2))
+
+    points1_hom = points1.T  # Shape: (2, N)
+    points2_hom = points2.T  # Shape: (2, N)
+
+    points_4d_hom = cv2.triangulatePoints(proj_matrix1, proj_matrix2, points1_hom, points2_hom)
+    points_3d = (points_4d_hom[:3] / points_4d_hom[3]).T  # Shape: (N, 3)
+
+    return points_3d
+
 
 
 # Task 4
 def resection(
-        image1,
-        image2,
-        camera_matrix,
-        matches,
-        points_3d
+        image1: np.ndarray,
+        image2: np.ndarray,
+        camera_matrix: np.ndarray,
+        matches: typing.Sequence[cv2.DMatch],
+        points_3d: np.ndarray,
 ):
-    pass
-    # YOUR CODE HERE
+    sift = cv2.SIFT_create()
+    kp1, descriptors1 = sift.detectAndCompute(image1, None)
+
+    image_points = []
+    object_points = []
+
+    for i, match in enumerate(matches):
+        idx = match.queryIdx
+        pt = kp1[idx].pt
+        image_points.append(pt)
+        object_point = points_3d[i]
+        object_points.append(object_point)
+
+    image_points = np.array(image_points, dtype=np.float64)
+    object_points = np.array(object_points, dtype=np.float64)
+
+    num_points = object_points.shape[0]
+    A = np.zeros((2 * num_points, 12))
+
+    for i in range(num_points):
+        X, Y, Z = object_points[i]
+        u, v = image_points[i]
+
+        A[2 * i] = [X, Y, Z, 1, 0, 0, 0, 0, -u * X, -u * Y, -u * Z, -u]
+        A[2 * i + 1] = [0, 0, 0, 0, X, Y, Z, 1, -v * X, -v * Y, -v * Z, -v]
+
+    U, S, Vt = np.linalg.svd(A)
+    P = Vt[-1].reshape(3, 4)
+
+    if np.linalg.det(P[:, :3]) < 0:
+        P = -P
+
+    K_inv = np.linalg.inv(camera_matrix)
+    M = K_inv @ P
+
+    R_hat_T = M[:, :3]
+    t_hat = M[:, 3]
+
+    R = R_hat_T.T
+    t = -R @ t_hat
+
+    return R, t.reshape(3, 1)
 
 
-def convert_to_world_frame(translation_vector, rotation_matrix):
-    pass
-    # YOUR CODE HERE
+
+def convert_to_world_frame(translation_vector: np.ndarray, rotation_matrix: np.ndarray) -> typing.Tuple[
+    np.ndarray, np.ndarray]:
+    world_rotation_matrix = rotation_matrix.T
+    camera_position = -world_rotation_matrix @ translation_vector
+    return camera_position, world_rotation_matrix
 
 
 def visualisation(
