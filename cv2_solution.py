@@ -102,13 +102,56 @@ def resection(
         matches: typing.Sequence[cv2.DMatch],
         points_3d: np.ndarray,
 ):
-    pass
-    # YOUR CODE HERE
+    sift = cv2.SIFT_create()
+    kp1, descriptors1 = sift.detectAndCompute(image1, None)
+
+    image_points = []
+    object_points = []
+
+    for i, match in enumerate(matches):
+        idx = match.queryIdx
+        pt = kp1[idx].pt
+        image_points.append(pt)
+        object_point = points_3d[i]
+        object_points.append(object_point)
+
+    image_points = np.array(image_points, dtype=np.float64)
+    object_points = np.array(object_points, dtype=np.float64)
+
+    num_points = object_points.shape[0]
+    A = np.zeros((2 * num_points, 12))
+
+    for i in range(num_points):
+        X, Y, Z = object_points[i]
+        u, v = image_points[i]
+
+        A[2 * i] = [X, Y, Z, 1, 0, 0, 0, 0, -u * X, -u * Y, -u * Z, -u]
+        A[2 * i + 1] = [0, 0, 0, 0, X, Y, Z, 1, -v * X, -v * Y, -v * Z, -v]
+
+    U, S, Vt = np.linalg.svd(A)
+    P = Vt[-1].reshape(3, 4)
+
+    if np.linalg.det(P[:, :3]) < 0:
+        P = -P
+
+    K_inv = np.linalg.inv(camera_matrix)
+    M = K_inv @ P
+
+    R_hat_T = M[:, :3]
+    t_hat = M[:, 3]
+
+    R = R_hat_T.T
+    t = -R @ t_hat
+
+    return R, t.reshape(3, 1)
 
 
-def convert_to_world_frame(translation_vector, rotation_matrix):
-    pass
-    # YOUR CODE HERE
+
+def convert_to_world_frame(translation_vector: np.ndarray, rotation_matrix: np.ndarray) -> typing.Tuple[
+    np.ndarray, np.ndarray]:
+    world_rotation_matrix = rotation_matrix.T
+    camera_position = -world_rotation_matrix @ translation_vector
+    return camera_position, world_rotation_matrix
 
 
 def visualisation(
