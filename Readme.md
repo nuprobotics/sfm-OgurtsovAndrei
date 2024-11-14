@@ -21,7 +21,7 @@ Create a function that performs triangulation for the 3D points.
 
 To test your implementation run:
 ```bash
-./auto_tests.sh MathTriangulationTest
+./auto_test.sh MathTriangulationTest
 ```
 
 ## Task 2
@@ -38,7 +38,7 @@ implement k-ratio test and left-right check. k for k-ratio test should be 0.75.
 
 To test your implementation run:
 ```bash
-./auto_tests.sh GetMatchesTest
+./auto_test.sh GetMatchesTest
 ```
 
 ## Task 3
@@ -53,10 +53,10 @@ Create a function that performs triangulation for the 3D points.
 
 To test your implementation run:
 ```bash
-./auto_tests.sh TriangulationTest
+./auto_test.sh TriangulationTest
 ```
 
-## Task 2 
+## Task 4 
 
 Create a function that performs resection.
 
@@ -67,9 +67,20 @@ Create a function that performs resection.
 
 To test your implementation run:
 ```bash
-./auto_tests.sh ResectionTest
+./auto_test.sh ResectionTest
 ```
 
-## Task 3 
+## Task 5 
 
-In file `cv2_solution.py` are already written some code that reads images from the `image` folder and 
+Create a function that translate rotation matrix and translation vector to camera rotation and camera position in world coordinate system
+
+**Autotests specs:**
++ Function should be called `convert_to_world_frame`
++ Function should take translation vector and rotation matrix
++ Function should return camera position and matrix of camera orientation
+
+To test your implementation run:
+```bash
+./auto_test.sh ConvertToWorldFrameTest
+```
+
